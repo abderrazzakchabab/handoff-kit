@@ -1,0 +1,23 @@
+{
+  "name": "handoff-kit",
+  "version": "1.1.0",
+  "description": "Installiert eine einheitliche Agent-Handoff-Struktur (AGENTS.md, CLAUDE.md, .ai/) in Repos",
+  "type": "module",
+  "bin": {
+    "handoff-kit": "bin/handoff-kit.mjs"
+  },
+  "files": [
+    "bin/",
+    ".ai/",
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
