@@ -135,7 +135,28 @@ test('CLI: Fehlerfälle und Exit-Codes', () => {
 test('CLI: mehrere Repos in einem Aufruf', () => {
     const a = tmpRepo('a');
     const b = tmpRepo('b');
-    const res = spawnSync(process.execPath, [CLI, a, b], { encoding: 'utf8' });
+    const res = spawnSync(process.execPath, [CLI, a, b, '--no-mermaid'], { encoding: 'utf8' });
     assert.equal(res.status, 0, res.stderr);
     assert.ok(fs.existsSync(path.join(a, 'AGENTS.md')) && fs.existsSync(path.join(b, 'AGENTS.md')));
+    assert.doesNotMatch(res.stdout, /Mermaid/);
+});
+
+// Mermaid-Tests mit leerem PATH: weder mmdc noch npm auffindbar -> deterministisch, kein Netzwerk.
+const runNoPath = (...a) => spawnSync(process.execPath, [CLI, ...a], { encoding: 'utf8', env: { PATH: '' } });
+
+test('Mermaid: --dry-run zeigt nur den npm-Befehl', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-kit-'));
+    tmpRoots.push(dir);
+    const res = runNoPath(dir, '--dry-run');
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /würde ausführen: npm install -g @mermaid-js\/mermaid-cli/);
+});
+
+test('Mermaid: fehlgeschlagene Installation warnt, Repo-Installation bleibt erfolgreich', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-kit-'));
+    tmpRoots.push(dir);
+    const res = runNoPath(dir);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /WARNUNG: Mermaid CLI konnte nicht installiert werden/);
+    assert.ok(fs.existsSync(path.join(dir, 'AGENTS.md')));
 });

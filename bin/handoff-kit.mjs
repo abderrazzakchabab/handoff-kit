@@ -4,7 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const KIT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -12,6 +12,7 @@ const KIT_VERSION = JSON.parse(fs.readFileSync(path.join(KIT_DIR, 'package.json'
 const BEGIN_MARK = '<!-- handoff-kit:begin -->';
 const END_MARK = '<!-- handoff-kit:end -->';
 const IS_WINDOWS = process.platform === 'win32';
+const MERMAID_PKG = '@mermaid-js/mermaid-cli';
 
 const HELP = `handoff-kit ${KIT_VERSION}
 Installiert AGENTS.md, CLAUDE.md und .ai/ (Doku-Gerüst, Skills, Skripte) in Repos.
@@ -26,6 +27,7 @@ Optionen:
   --force         Kit-eigene Dateien aktualisieren: .ai/skills/, .ai/scripts/, Vorlagen und den
                   Handoff-Protokoll-Block in AGENTS.md. Befüllte Doku wird NIE überschrieben.
   --dry-run       Nur anzeigen, was passieren würde
+  --no-mermaid    Mermaid CLI (mmdc) nicht installieren
   -v, --version   Version anzeigen
   -h, --help      Diese Hilfe
 
@@ -34,18 +36,22 @@ Verhalten bei bestehenden Dateien:
   CLAUDE.md vorhanden   -> '@AGENTS.md' wird als erste Zeile ergänzt, falls es fehlt
   .ai/<datei> vorhanden -> wird übersprungen (außer kit-eigene Dateien mit --force)
 
+Fehlt die Mermaid CLI (mmdc), wird sie einmalig global installiert:
+  npm install -g ${MERMAID_PKG}
+
 Es wird nichts committet. Danach im Repo den Skill "handoff-init" ausführen.`;
 
 class UsageError extends Error {}
 
 export function parseArgs(argv) {
-    const opts = { targets: [], copySkills: IS_WINDOWS, force: false, dryRun: false, help: false, version: false };
+    const opts = { targets: [], copySkills: IS_WINDOWS, force: false, dryRun: false, mermaid: true, help: false, version: false };
     for (const arg of argv) {
         switch (arg) {
             case '--copy-skills': opts.copySkills = true; break;
             case '--link-skills': opts.copySkills = false; break;
             case '--force': opts.force = true; break;
             case '--dry-run': opts.dryRun = true; break;
+            case '--no-mermaid': opts.mermaid = false; break;
             case '-h': case '--help': opts.help = true; break;
             case '-v': case '--version': opts.version = true; break;
             default:
@@ -283,6 +289,39 @@ export function installRepo(targetArg, opts, log = console.log) {
     return { target, ...report };
 }
 
+// --- Mermaid CLI -------------------------------------------------------------
+
+function runs(cmd, args) {
+    // shell nötig unter Windows, weil npm/mmdc dort .cmd-Dateien sind
+    const res = spawnSync(cmd, args, { stdio: 'ignore', shell: IS_WINDOWS });
+    return !res.error && res.status === 0;
+}
+
+// Installiert die Mermaid CLI global, falls mmdc fehlt. Ein Fehlschlag bricht die Installation nicht ab.
+export function ensureMermaidCli(opts, log = console.log) {
+    if (!opts.mermaid) return 'deaktiviert';
+    if (runs('mmdc', ['--version'])) {
+        log('\nMermaid CLI (mmdc) ist bereits installiert.');
+        return 'vorhanden';
+    }
+    const cmd = `npm install -g ${MERMAID_PKG}`;
+    if (opts.dryRun) {
+        log(`\nMermaid CLI fehlt – würde ausführen: ${cmd}`);
+        return 'dry-run';
+    }
+    log(`\nMermaid CLI fehlt – führe aus: ${cmd}`);
+    const res = spawnSync('npm', ['install', '-g', MERMAID_PKG], { stdio: 'inherit', shell: IS_WINDOWS });
+    if (!res.error && res.status === 0) {
+        log('Mermaid CLI installiert.');
+        return 'installiert';
+    }
+    log(`\nWARNUNG: Mermaid CLI konnte nicht installiert werden${res.error ? ` (${res.error.code})` : ''}.`);
+    log('         Diagramme werden dann nicht maschinell geprüft. Manuell nachholen:');
+    log(`           ${cmd}`);
+    log('         (bei Rechtefehlern: npm-Prefix ins Home-Verzeichnis legen oder nvm verwenden, kein sudo nötig)');
+    return 'fehlgeschlagen';
+}
+
 function nextSteps(targets) {
     const cd = targets.length === 1 ? targets[0] : '<repo>';
     return `
@@ -318,7 +357,10 @@ function main(argv) {
             failed++;
         }
     }
-    if (done.length) console.log(nextSteps(done));
+    if (done.length) {
+        ensureMermaidCli(opts);
+        console.log(nextSteps(done));
+    }
     return failed ? 1 : 0;
 }
 

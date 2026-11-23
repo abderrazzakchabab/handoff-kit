@@ -54,6 +54,7 @@ npx github:abderrazzakchabab/handoff-kit ~/Work/repos/*/
 | `--copy-skills` | kopiert Skills nach `.claude/skills/` statt Symlinks (Standard unter Windows) |
 | `--link-skills` | verlinkt Skills immer, auch unter Windows (braucht Symlink-Recht/Entwicklermodus) |
 | `--force` | aktualisiert kit-eigene Dateien (`.ai/skills/`, `.ai/scripts/`, Vorlagen, Protokoll-Block in `AGENTS.md`) |
+| `--no-mermaid` | Mermaid CLI nicht installieren |
 | `-v`, `--version` | Version anzeigen |
 
 ## Was installiert wird
@@ -93,7 +94,8 @@ Platzhalter, die beim Installieren ersetzt werden: `{{REPO_NAME}}`, `{{DATUM}}`,
   passiert nichts (Hinweis im Bericht).
 - Wird ein Unterordner angegeben, wird ins Repo-Root installiert.
 - Mehrfaches Ausführen ist unschädlich (idempotent); Dateien werden atomar geschrieben.
-- Es wird nichts committet und kein Netzwerk benutzt.
+- Es wird nichts committet. Netzwerk wird nur benutzt, wenn die Mermaid CLI fehlt
+  (`npm install -g @mermaid-js/mermaid-cli`, abschaltbar mit `--no-mermaid`).
 - Warnung, wenn `.ai/` per `.gitignore` ausgeschlossen ist, und Hinweis, wenn `.claude/` ignoriert wird
   (dann muss jede Person handoff-kit selbst ausführen, damit Claude Code die Skills findet).
 
@@ -118,9 +120,13 @@ handoff-check:
 
 ## Diagramme
 
-Die Skills erzeugen Mermaid (`.mmd`). Zum Prüfen/Rendern wird die Mermaid CLI gebraucht:
-`npm install -g @mermaid-js/mermaid-cli` oder einmalig `HANDOFF_MMDC="npx -y @mermaid-js/mermaid-cli@11.4.2"`.
-Ohne `mmdc` beendet sich `render-diagrams.sh` mit Exit-Code 3 und der Agent meldet, dass nicht maschinell geprüft wurde.
+Die Skills erzeugen Mermaid (`.mmd`). Zum Prüfen/Rendern wird die Mermaid CLI (`mmdc`) gebraucht.
+handoff-kit installiert sie automatisch einmal global (`npm install -g @mermaid-js/mermaid-cli`), wenn `mmdc`
+fehlt. Schlägt das fehl (z. B. keine Schreibrechte auf den globalen npm-Prefix), gibt es nur eine Warnung –
+die Repo-Installation ist trotzdem erfolgreich.
+
+Ohne `mmdc` beendet sich `render-diagrams.sh` mit Exit-Code 3 und der Agent meldet, dass nicht maschinell geprüft
+wurde. Alternativ ohne globale Installation: `HANDOFF_MMDC="npx -y @mermaid-js/mermaid-cli@11.4.2"`.
 
 ## Hinweis zu Skills
 
